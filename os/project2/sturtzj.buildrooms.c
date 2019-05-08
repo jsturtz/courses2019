@@ -18,23 +18,25 @@ struct Room
 void makeDirectory(char* dir) {
 
   sprintf(dir, "sturtzj.rooms.%d", getpid());
-  printf("Dir: %s", dir);
   mkdir(dir, S_IRUSR | S_IWUSR | S_IXUSR);
 }
 
 /* will make the files that should populate the directory named by dir with values from rooms array*/
 void makeFiles(struct Room rooms[7], char* dir) {
 
-  int r, c;  
-  FILE* file;
+  int r, c;     /* r = index for rooms, c = index for connections */
+  FILE* file;   
   char path[50];
   for (r = 0; r < 7; r++) {
+    /* build up path string first, then use fopen */
     memset(path, '\0', 50);
     strcpy(path, dir);                  /* copy directory characters first */
     strcat(path, "/");                  /* concat the path symbol */
     strcat(path, rooms[r].name);        /* concat the name of room */
     strcat(path, "_room");              /* final extra bit */
     file = fopen(path, "w");
+
+    /* print results to file */
     fprintf(file, "ROOM NAME: %s\n", rooms[r].name);
     for (c = 0; c < rooms[r].numConnections; c++) {
       fprintf(file, "CONNECTION %d: %s\n", c+1, rooms[r].connections[c]->name);
@@ -86,7 +88,10 @@ void assignNames(struct Room rooms[7], char* roomNames[10]) {
   
   int i = 0; 
   while (i < 7) {
+    /* get random index */
     int index = rand() % 10;
+
+    /* will set already used indices to NULL */
     if (roomNames[index] != NULL) {
       strcpy(rooms[i].name, roomNames[index]);
       roomNames[index] = NULL;
