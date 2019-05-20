@@ -1,0 +1,15 @@
+*.aux
+*.fdb_latexmk
+*.log
+*.sty
+*.fls
+*.pdf
+*.plist
+*.png
+*.plist
+*.out
+*.sw*
+runArrayMult
+runReduction
+reduction
+clArrayMult
