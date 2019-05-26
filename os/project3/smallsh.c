@@ -26,14 +26,6 @@
 // global needed for handling CTRL-Z signal
 int   pauseProgram = 0;
 
-void doAtExit() 
-{
-   /* * Your cd command should support both absolute and relative paths. When smallsh terminates, */ 
-   /* * the original shell it was launched from will still be in its original working directory, */ 
-   /* * despite your use of chdir() in smallsh. Your shell's working directory begins in whatever */ 
-   /* * directory your shell's executible was launched from. *1/ */
-}
-
 // removes newline at end of input buffer, replaces with null terminator
 void stripNewline(char* inputBuffer) 
 {
@@ -61,6 +53,7 @@ void expandPID(char* inputBuffer, int pid)
   }
 }
 
+// used to free and set null the pointers held by args
 void deleteArgs(char** args) 
 {
   int a = 0; 
@@ -72,6 +65,7 @@ void deleteArgs(char** args)
   }
 }
 
+// used to memory allocate new arg and put pointer into args
 void addArg(char** args, char* newArg) 
 {
   // find index of next spot in args array
@@ -84,6 +78,7 @@ void addArg(char** args, char* newArg)
 }
 
 // splits raw inputBuffer into args string array
+// also fills contents of in/out with filenames and sets bg flag
 int parse(char* inputBuffer, char** args, char* in, char* out, int* bg) {
   
   // frees all pointers in args, sets to Null
@@ -94,21 +89,25 @@ int parse(char* inputBuffer, char** args, char* in, char* out, int* bg) {
   out[0] = '\0';
   *bg = 0;
 
+  // iterate over tokenized words
   char* token = strtok(inputBuffer, " "); 
   while (token) 
   {
+    // if input redirect symbol detected, fill contents of in
     if (token[0] == '<' && token[1] == '\0')
     {
       token = strtok(NULL, " ");        // skip the next word
       strcpy(in, token);
     }
 
+    // if output redirect symbol detected, fill contents of out
     else if (token[0] == '>' && token[1] == '\0')
     {
       token = strtok(NULL, " ");        // skip the next word
       strcpy(out, token);
     }
 
+    // if background symbol detected, set bg flag and return
     else if (token[0] == '&' && token[1] == '\0')
     {
       *bg = 1;
@@ -118,13 +117,14 @@ int parse(char* inputBuffer, char** args, char* in, char* out, int* bg) {
     {
       addArg(args, token); // allocates space for array, fills with contents of token
     }
-    token = strtok(NULL, " "); 
+    token = strtok(NULL, " "); // keep searching for args
   }
 }
 
 // function that handles built-in "cd" command
 int changeDir(char* path, char* error) 
 {
+  // if path provided, change to it
   if (path) 
   {
     if (chdir(path) == -1) 
@@ -133,6 +133,7 @@ int changeDir(char* path, char* error)
       return -1;
     }
   }
+  // if not, change to home dir
   else 
   {
     chdir(getenv("HOME"));
@@ -143,7 +144,7 @@ int changeDir(char* path, char* error)
 // function that handles built-in "exit" command
 void exitProgram(int* children, int childrenCount) 
 {
-  int c = 0;
+  // kill children and exit
   for (int c = 0; c < childrenCount; c++) 
   {
     kill(children[c], SIGKILL);
@@ -155,20 +156,9 @@ void exitProgram(int* children, int childrenCount)
 void parentSIGINT(int signo) {
   int childExitStatus = -5;
   wait(&childExitStatus);
-  
-  // must display to user which signal killed child process if any
-  if (WIFSIGNALED(childExitStatus))
-  {
-    /* char message[24] = "terminated by signal"; */
-    /* int sig = WTERMSIG(childExitStatus); */
-    /* printf("Sig: %d\n", sig); */
-
-    /* strcat(message, &sig); */
-    /* strcat(message, "\n"); */
-    /* write(STDOUT_FILENO, message, 24); */
-  }
 }
 
+// toggles pauseProgram and writes relevant message
 void parentSIGTSTP(int signo) {
   char message[31];
   if (pauseProgram) 
@@ -184,8 +174,11 @@ void parentSIGTSTP(int signo) {
   pauseProgram = (pauseProgram == 0); // toggle global pause variable
 }
 
+// used to reset array data structure so that there are no "holes",
+// i.e. a value of 0 counts as the end of the array
 void resetArray(int* arr, int oldSize) 
 {
+  // temp will be filled with any nonzero values found in arr
   int temp[oldSize];
   memset(temp, 0, sizeof(int) * oldSize);
 
@@ -201,14 +194,13 @@ void resetArray(int* arr, int oldSize)
     }
   }
 
+  // then, empty arr and fill with values in temp to eliminate "holes"
   memset(arr, 0, sizeof(int) * oldSize);
   for (newIndex = 0; newIndex < oldSize; newIndex++) 
   {
     arr[newIndex] = temp[newIndex];
   }
 }
-
-// need this global variable because signal handling requires it
 
 int main() {
 
@@ -219,20 +211,6 @@ int main() {
   char  startDir[CMD_LENGTH]        = {'\0'};   // holds path for current working directory
   char  error[100]                  = {'\0'};   // holds error message from failed function calls
 
-  int   children[NUM_PROCESSES]     = { 0 };    // holds error message from failed function calls
-  int   childrenCount   = 0;                    // holds number of child processes
-
-  int   bg              = 0;                    // flag for whether command should be backgrounded
-  int   fgExitStatus    = 0;                    // holds exit status for foregrounded processes that terminate
-  char  fgExitMessage[CMD_LENGTH]   = {'\0'};   // holds exit message for foregrounded processes that terminate
-  
-  pid_t spawnPid;               
-  int   childExitStatus;  
-  struct sigaction SIGINT_action = {0};
-  struct sigaction SIGTSTP_action = {0};
-  struct sigaction SIGINT_childAction = {0};
-  struct sigaction SIGTSTP_childAction = {0};
-
   // args will hold all the pointers to pointers, initialized to null
   char** args = (char**) calloc(MAX_ARGS, sizeof(char*));
   for (int i = 0; i < MAX_ARGS; i++) 
@@ -240,32 +218,50 @@ int main() {
     args[i] = NULL;
   }
 
+  int   children[NUM_PROCESSES]     = { 0 };    // holds error message from failed function calls
+  int   childrenCount   = 0;                    // holds number of child processes
+
+  int   bg              = 0;                    // flag for whether command should be backgrounded
+  int   fgExitStatus    = 0;                    // holds exit status for foregrounded processes that terminate
+  char  fgExitMessage[CMD_LENGTH]   = {'\0'};   // holds exit message for foregrounded processes that terminate
+  
+  pid_t spawnPid;                               // used for forking below
+  int   childExitStatus;                        // will hold exit status retrieved from wait/waidpid
+  
+  // keep signal handling separate for child/parent
+  struct sigaction SIGINT_action = {0};          
+  struct sigaction SIGTSTP_action = {0};
+  struct sigaction SIGINT_childAction = {0};
+  struct sigaction SIGTSTP_childAction = {0};
+
   while(1) {
 
     // check if children have become zombies
     int c = 0;
     while (children[c] != 0)
     {
+      // if zombie detected among children
       if (waitpid(children[c], &childExitStatus, WNOHANG) != 0)
       {
+        // check if exit was normal
         if (WIFEXITED(childExitStatus))
         {
           int exitStatus = WEXITSTATUS(childExitStatus);
           printf("Process %d completed normally with exit status %d\n", children[c], exitStatus);
           fflush(stdout);
         }
+        // if not, it was killed by signal
         else
         {
           int exitSignal = WIFSIGNALED(childExitStatus);
           printf("Process %d terminated by signal %d\n", children[c], exitSignal);
           fflush(stdout);
         }
-        children[c] = 0;
-        childrenCount--;
+        children[c] = 0; // set value to zero to be cleaned up by resetArray
+        childrenCount--; 
       }
       c++;
     }
-
     resetArray(children, childrenCount);
 
     // get input from user
@@ -273,9 +269,9 @@ int main() {
     fflush(stdout);
     memset(inputBuffer, CMD_LENGTH, '\0');
     if (fgets(inputBuffer, CMD_LENGTH, stdin)) // will return NULL upon receipt of signal so this is necessary
-    {
-      stripNewline(inputBuffer);  
-      expandPID(inputBuffer, getpid());
+    {   
+      stripNewline(inputBuffer);        // replace automatic newline with null terminator
+      expandPID(inputBuffer, getpid()); // do variable expansion on $$
 
       // fills args with everything needed for execvp
       // fills in/out with filenames if exist, sets bg flag for parent
@@ -313,11 +309,13 @@ int main() {
           spawnPid = fork();
           switch (spawnPid)
           {
+            // something went horribly wrong
             case -1:
               perror("Hull Breach!\n");
               exit(1);
               break;
 
+            // child process will get spawnpid == 0
             case 0:
 
               // both fg and bg should ignore SIGTSTP
@@ -326,7 +324,7 @@ int main() {
               SIGTSTP_childAction.sa_flags = 0;
               sigaction(SIGTSTP, &SIGTSTP_childAction, NULL);
               
-              // set to ignore SIGINT only if program backgrounded
+              // set to ignore SIGINT only if program backgrounded (must also not have been paused by SIGTSTP)
               if (bg && !pauseProgram)
               {
                 SIGINT_childAction.sa_handler = SIG_IGN;
@@ -344,7 +342,7 @@ int main() {
                   dup2(outFile, 1);
                   close(outFile);
                 }
-                else 
+                else    // something went wrong in opening file
                 {
                   printf("cannot open %s for output\n", out);
                   fflush(stdout);
@@ -361,7 +359,7 @@ int main() {
                   dup2(inFile, 0);
                   close(inFile);
                 }
-                else 
+                else    // something went wrong in opening file
                 {
                   printf("cannot open %s for input\n", in);
                   fflush(stdout);
@@ -369,7 +367,7 @@ int main() {
                 }
               }
 
-              // If process to be backgrounded, change redirection to dev/null
+              // If process to be backgrounded, change redirections to dev/null
               if (bg && !pauseProgram) 
               {
                 int devNull = open("/dev/null", O_RDWR);
@@ -416,18 +414,21 @@ int main() {
               {
                 // since not backgrounded, wait here
                 waitpid(spawnPid, &childExitStatus, 0);
+
+                // if child exited normally: 
                 if (WIFEXITED(childExitStatus))
                 {
                   fgExitStatus = WEXITSTATUS(childExitStatus);
                   sprintf(fgExitMessage, "exit value %d\n", fgExitStatus);
                 }
+
+                // if killed by signal:
                 else if (WIFSIGNALED(childExitStatus))
                 {
                   fgExitStatus = WTERMSIG(childExitStatus);
                   printf("terminated by signal %d\n", fgExitStatus);
                   sprintf(fgExitMessage, "terminated by signal %d\n", fgExitStatus);
                   fflush(stdout);
-                  /* kill(spawnPid, SIGKILL); */
                 }
               }
               break;
@@ -439,9 +440,6 @@ int main() {
   }
 
   // free space
-  deleteArgs(args);
-  free(args);
+  deleteArgs(args); // frees space of each pointer within args
+  free(args);       // frees args itself
 }  
-
-/* Your program must expand any instance of "$$" in a command into the process ID of the shell itself. Your shell does not otherwise perform variable expansion. This feature makes it easier to create a grading script that keeps your work separate. */
-
