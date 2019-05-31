@@ -1,0 +1,332 @@
+%%% Template by Mikhail Klassen, April 2013
+%%% 
+\documentclass[11pt,letterpaper]{article}
+\newcommand{\workingDate}{\textsc{2019 $|$ April $|$ 2}}
+\newcommand{\userName}{Jordan Sturtz}
+\newcommand{\institution}{ Oregon State University} \usepackage{researchdiary_png}
+\usepackage{listings, lstautogobble}
+\usepackage{graphicx}
+\usepackage{wrapfig}
+\usepackage{enumitem}
+
+\lstset{
+  autogobble=true, 
+  breaklines=true
+}
+
+% To add your univeristy logo to the upper right, simply
+% upload a file named "logo.png" using the files menu above.
+
+\begin{document} \univlogo
+
+\title{CS 362 - Assignment 4}
+{\Huge CS 362 - Assignment 4}\\[5mm]
+\begin{enumerate}[label=\arabic*., leftmargin=*]
+  \item \textbf{Random Testing}
+
+    I wanted to randomize the variables that would seem to be most relevant to 
+    bizzare undesirable behavior. Thus, I wrote a loop that on each iteration,
+    will randomize the number of players (2 - 4), the decksize and contents for
+    each player, the discard size and contents for each player, and the hand size
+    and contents for each player. I made sure to randomize the deck and hand for
+    each player such that they will never exceed MAX\_DECK and MAX\_HAND 
+    defined in dominion.h. I also randomized the discard count such that it will
+    be equal to MAX\_DECK - deckCount so that there cannot be any behavior due to
+    the decksize increasing beyond MAX\_DECK due to a shuffle. 
+
+    There are potential problems with this approach to setting random variables.
+    For instance, it makes no attempt to stay consistent with the fact that
+    each person's deck must come from fixed supply piles. However, the
+    three functions I am testing do not depend on checking or modifying
+    the supply piles, so I decided this issue was irrelevant. If any of the
+    cards had a gain effect, it would be important to ensure a more game-realistic
+    gamestate with respect to supply piles and player hands. 
+
+    There is one other issue with adventurer that required a small modification. 
+    Since the adventurer draws until two treasures are found, it is possible
+    that randomly assigning the deck will not produce any treasures. To
+    account for this, I added two random treasures to each player's deck in
+    testing adventurerEffect.
+
+    Once these random variables are assigned, each iteration calls its respective
+    function, then runs a series of tests detailed below: 
+
+    \begin{itemize}[leftmargin=*]
+
+      \item \textbf{Smithy Card}
+        \begin{itemize}[leftmargin=*]
+          \item File: randomcardtest1.c
+          \item Function to test: smithyEffect
+          \item Tests
+            \begin{itemize}[leftmargin=*]
+              \item Number cards in hand increases by two
+                \begin{lstlisting}
+                ASSERT_TRUE(testG.handCount[player] == G.handCount[player] + 2);
+                \end{lstlisting}
+
+              \item Smithy added to playedCard array
+                \begin{lstlisting}
+                ASSERT_TRUE(testG.playedCards[testG.playedCardCount-1] == smithy);
+                \end{lstlisting}
+
+              \item Original hand remains unchanged
+
+                \begin{lstlisting}
+                ASSERT_TRUE(memcmp(testG.hand[player], G.hand[player], G.handCount[player] - 1) == 0);
+                \end{lstlisting}
+
+              \item Total card count should not have changed
+
+                \begin{lstlisting}
+                ASSERT_TRUE(G.handCount[player] + G.discardCount[player] + G.deckCount[player] + G.playedCardCount == testG.handCount[player] + testG.discardCount[player] + testG.deckCount[player] + testG.playedCardCount);
+                \end{lstlisting}
+
+              \item Top X of player hand == top X of deck before function call, where X is either top three of deck or remaining X from deck
+
+                \begin{lstlisting}
+                int topDeck[3];
+                int topHand[3];
+                memset(topDeck, '\0', 3);
+                memset(topHand, '\0', 3);
+
+                int numSet;
+                if (G.deckCount[player] >= 3)
+                  numSet = 3;
+                else
+                  numSet = G.deckCount[player];
+
+                memcpy(topDeck, &G.deck[player][G.deckCount[player] - numSet], sizeof(int) * numSet);
+                memcpy(topHand, &testG.hand[player][testG.handCount[player] - numSet], sizeof(int) * numSet);
+                ASSERT_TRUE(isSameSet(topDeck, topHand, numSet, isGreaterThan));
+                \end{lstlisting}
+
+              \item Gamestate has not changed for any non-player variable
+
+                \begin{lstlisting}
+                ASSERT_TRUE(G.numPlayers == testG.numPlayers);
+                ASSERT_TRUE(memcmp(G.supplyCount, testG.supplyCount, (treasure_map+1) * sizeof(int)) == 0);
+                ASSERT_TRUE(memcmp(G.embargoTokens, testG.embargoTokens, (treasure_map+1) * sizeof(int)) == 0);
+                ASSERT_TRUE(G.outpostPlayed == testG.outpostPlayed);
+                ASSERT_TRUE(G.outpostTurn == testG.outpostTurn);
+                ASSERT_TRUE(G.whoseTurn == testG.whoseTurn);
+                ASSERT_TRUE(G.phase == testG.phase); 
+                ASSERT_TRUE(G.numActions == testG.numActions); 
+                ASSERT_TRUE(G.coins == testG.coins); 
+                ASSERT_TRUE(G.numBuys == testG.numBuys); 
+                \end{lstlisting}
+
+              \item Gamestate has not changed for any other player
+
+                \begin{lstlisting}
+                for (j = 0; j < numPlayers; j++) {
+                  if (j != player) {
+                    ASSERT_TRUE(memcmp(G.hand[j], testG.hand[j], sizeof(int) * (G.handCount[j] - 1)) == 0);
+                    ASSERT_TRUE(memcmp(G.discard[j], testG.discard[j], sizeof(int) * (G.discardCount[j] - 1)) == 0);
+                    ASSERT_TRUE(memcmp(G.deck[j], testG.deck[j], sizeof(int) * (G.deckCount[j] - 1)) == 0);
+                  }
+                }
+                \end{lstlisting}
+          \end{itemize}
+      \end{itemize}
+
+
+      \item \textbf{Council Room Card}
+        \begin{itemize}[leftmargin=*]
+          \item File: randomcardtest2.c
+          \item Function to test: councilRoomEffect
+          \item Tests
+        \begin{itemize}[leftmargin=*]
+              \item Number cards in hand increases by three
+                  \begin{lstlisting}
+                  ASSERT_TRUE(testG.handCount[player] == G.handCount[player] + 3);
+                  \end{lstlisting}
+              \item Council Room added to playedCard array
+
+                  \begin{lstlisting}
+                  ASSERT_TRUE(testG.playedCards[testG.playedCardCount-1] == council_room);
+                  \end{lstlisting}
+              \item Original hand remains unchanged
+
+                  \begin{lstlisting}
+                  ASSERT_TRUE(memcmp(testG.hand[player], G.hand[player], G.handCount[player] - 1) == 0);
+                  \end{lstlisting}
+              \item Total card count should not have changed
+
+                  \begin{lstlisting}
+                  ASSERT_TRUE(G.handCount[player] + G.discardCount[player] + G.deckCount[player] + G.playedCardCount == testG.handCount[player] + testG.discardCount[player] + testG.deckCount[player] + testG.playedCardCount);
+                  \end{lstlisting}
+
+              \item Top X of player hand == top X of deck before function call, where X is either top four of deck or remaining X from deck
+                  \begin{lstlisting}
+                  int topDeck[4];
+                  int topHand[4];
+                  memset(topDeck, '\0', 4);
+                  memset(topHand, '\0', 4);
+
+                  int numSet;
+                  if (G.deckCount[player] >= 4)
+                    numSet = 4;
+                  else
+                    numSet = G.deckCount[player];
+
+                  memcpy(topDeck, &G.deck[player][G.deckCount[player] - numSet], sizeof(int) * numSet);
+                  memcpy(topHand, &testG.hand[player][testG.handCount[player] - numSet], sizeof(int) * numSet);
+                  ASSERT_TRUE(isSameSet(topDeck, topHand, numSet, isGreaterThan));
+                  \end{lstlisting}
+
+              \item Gamestate has not changed for any non-player variable except numBuys
+
+                  \begin{lstlisting}
+                  ASSERT_TRUE(G.numPlayers == testG.numPlayers);
+                  ASSERT_TRUE(memcmp(G.supplyCount, testG.supplyCount, (treasure_map+1) * sizeof(int)) == 0);
+                  ASSERT_TRUE(memcmp(G.embargoTokens, testG.embargoTokens, (treasure_map+1) * sizeof(int)) == 0);
+                  ASSERT_TRUE(G.outpostPlayed == testG.outpostPlayed);
+                  ASSERT_TRUE(G.outpostTurn == testG.outpostTurn);
+                  ASSERT_TRUE(G.whoseTurn == testG.whoseTurn);
+                  ASSERT_TRUE(G.phase == testG.phase); 
+                  ASSERT_TRUE(G.numActions == testG.numActions); 
+                  ASSERT_TRUE(G.coins == testG.coins); 
+                  ASSERT_TRUE(G.numBuys + 1 == testG.numBuys); 
+                  \end{lstlisting}
+
+              \item Gamestate has not changed for any other player except one card draw
+                  \begin{lstlisting}
+                   for (j = 0; j < numPlayers; j++) {
+                     if (j != player) {
+                       ASSERT_TRUE(G.handCount[j] + 1 == testG.handCount[j]);
+                   
+                       // Assertions depend on whether deck must be shuffled for draw, i.e. deckCount == 0
+                       if (G.deckCount[j] != 0) {
+                         ASSERT_TRUE(G.deckCount[j] == testG.deckCount[j] + 1);
+                         ASSERT_TRUE(G.discardCount[j] == testG.discardCount[j]);
+                        }
+                       else
+                         ASSERT_TRUE(testG.discardCount[j] == 0);
+                     }
+                   }
+                  \end{lstlisting}
+          \end{itemize}
+      \end{itemize}
+
+      \item \textbf{Adventurer Card}
+        \begin{itemize}[leftmargin=*]
+          \item File: randomtestadventurer.c
+          \item Function to test: adventurerEffect
+          \item Tests
+        \begin{itemize}[leftmargin=*]
+              \item Number cards in hand increases by 1
+                  \begin{lstlisting}
+                  ASSERT_TRUE(testG.handCount[player] == G.handCount[player] + 1);
+                  \end{lstlisting}
+              \item Adventurer added to playedCard array
+
+                  \begin{lstlisting}
+                  assert_true(testg.playedcards[testg.playedcardcount-1] == adventurer);
+                  \end{lstlisting}
+
+              \item Two new cards are treasures
+                  \begin{lstlisting}
+                  ASSERT_TRUE(testG.hand[player][testG.handCount[player] - 1] <= gold && 
+                              testG.hand[player][testG.handCount[player] - 1] >= copper);
+                  ASSERT_TRUE(testG.hand[player][testG.handCount[player] - 2] <= gold && 
+                              testG.hand[player][testG.handCount[player] - 2] >= copper);
+                  \end{lstlisting}
+
+              \item Original hand remains unchanged
+
+                  \begin{lstlisting}
+                  ASSERT_TRUE(memcmp(testG.hand[player], G.hand[player], G.handCount[player] - 1) == 0);
+                  \end{lstlisting}
+              \item Total card count should not have changed
+
+                  \begin{lstlisting}
+                  ASSERT_TRUE(G.handCount[player] + G.discardCount[player] + G.deckCount[player] + G.playedCardCount == testG.handCount[player] + testG.discardCount[player] + testG.deckCount[player] + testG.playedCardCount);
+                  \end{lstlisting}
+
+              \item Gamestate has not changed for any non-player variable
+
+                  \begin{lstlisting}
+                  ASSERT_TRUE(G.numPlayers == testG.numPlayers);
+                  ASSERT_TRUE(memcmp(G.supplyCount, testG.supplyCount, (treasure_map+1) * sizeof(int)) == 0);
+                  ASSERT_TRUE(memcmp(G.embargoTokens, testG.embargoTokens, (treasure_map+1) * sizeof(int)) == 0);
+                  ASSERT_TRUE(G.outpostPlayed == testG.outpostPlayed);
+                  ASSERT_TRUE(G.outpostTurn == testG.outpostTurn);
+                  ASSERT_TRUE(G.whoseTurn == testG.whoseTurn);
+                  ASSERT_TRUE(G.phase == testG.phase); 
+                  ASSERT_TRUE(G.numActions == testG.numActions); 
+                  ASSERT_TRUE(G.coins == testG.coins); 
+                  ASSERT_TRUE(G.numBuys == testG.numBuys); 
+                  \end{lstlisting}
+
+              \item Gamestate has not changed for any other player
+                  \begin{lstlisting}
+                  for (j = 0; j < numPlayers; j++) {
+                    if (j != player) {
+                      ASSERT_TRUE(memcmp(G.hand[j], testG.hand[j], sizeof(int) * (G.handCount[j] - 1)) == 0);
+                      ASSERT_TRUE(memcmp(G.discard[j], testG.discard[j], sizeof(int) * (G.discardCount[j] - 1)) == 0);
+                      ASSERT_TRUE(memcmp(G.deck[j], testG.deck[j], sizeof(int) * (G.deckCount[j] - 1)) == 0);
+                    }
+                  }
+                  \end{lstlisting}
+          \end{itemize}
+      \end{itemize}
+    \end{itemize}
+
+  \item \textbf{Code Coverage}
+  
+    With number of iterations set to 10, the coverage results were the following: 
+    \begin{lstlisting}
+    Function 'adventurerEffect'
+    Lines executed:88.24% of 17
+    Branches executed:100.00% of 12
+    Taken at least once:91.67% of 12
+    No calls
+
+    Function 'smithyEffect'
+    Lines executed:100.00% of 6
+    Branches executed:100.00% of 2
+    Taken at least once:100.00% of 2
+    No calls
+
+    Function 'councilRoomEffect'
+    Lines executed:100.00% of 11
+    Branches executed:100.00% of 6
+    Taken at least once:100.00% of 6
+    No calls
+    \end{lstlisting}
+  
+    The 100\% branch and statement coverage for smithyEffect and councilRoomEffect are uninteresting
+    because both of these functions are guaranteed to hit all branches and therefore all 
+    statements for all executions. For this reason, I chose to run adventurerEffect
+    with a larger input size than ten to measure how long it takes to achieve 100\% 
+    branch and statement coverage. I compiled and executed the program with NUMTRIES = 1000, 
+    and received the following result: 
+
+    \begin{lstlisting}
+    Function 'adventurerEffect'
+    Lines executed:100.00% of 17
+    Branches executed:100.00% of 12
+    Taken at least once:100.00% of 12
+    No calls
+    \end{lstlisting}
+
+    This executed in seconds. 
+
+  \item \textbf{Random Versus Unit Testing}
+
+    I designed my unit tests for all three of the above functions for assignment-2 such that
+    it would be guaranteed to hit all branches. Thus, strictly speaking, the coverage is
+    the same for both the manual and random testing. 
+
+    The major difference between this week's random testing and assignment-2's manual testing
+    is that random testing covers far more possibilites because of how it randomizes the hands, 
+    decks, and discards. For example, suppose that there the code in adventurerEffect has a 
+    bug such that it will discard \emph{any} adventurer cards in hand upon being played. My manual
+    testing did not cover this case. There is no guarantee that this week's random testing
+    would cover this case, but since the hands are randomized, the greater the iterations
+    the greater the chance that this fault would be discovered. Thus, even though the
+    types of tests covered are virtually identical for both manual and random testing, we
+    would expect the random testing to be far more robust in finding bugs. 
+
+\end{enumerate}
+\end{document}
